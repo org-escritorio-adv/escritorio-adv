@@ -134,6 +134,9 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# Docker: dados locais do PostgreSQL
+postgres/
+
 # Environments
 .env
 .envrc
