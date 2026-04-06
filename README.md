@@ -30,6 +30,12 @@ escritorio-adv/
 └── postgres/          # Dados do Postgres (volume local, não versionado)
 ```
 
+## Clonar repositório
+
+```
+git clone --recurse-submodules https://github.com/org-escritorio-adv/escritorio-adv.git
+```
+
 ## Pré-requisitos
 
 - **Docker** e **Docker Compose** 
