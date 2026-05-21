@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: org-escritorio-adv
       POSTGRES_DB: org-escritorio-adv
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - ./postgres:/var/lib/postgresql/data
     healthcheck:
