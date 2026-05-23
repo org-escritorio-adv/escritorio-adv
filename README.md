@@ -81,6 +81,22 @@ docker-compose down
 | Health + banco  | http://localhost:8000/health/db |
 | Frontend (Vite) | http://localhost:3000 |
 
+## Como executar o Smoke de Teste
+
+Instale o jq se não possuir:
+
+```bash
+sudo apt install jq
+```
+
+Torne o arquivo executavel e execute:
+
+```bash
+chmod +x scripts/smoke-api.sh
+./scripts/smoke-api.sh
+```
+
+
 O endpoint `/health/db` executa `SELECT 1` no PostgreSQL e confirma que a API alcança o banco usando a `DATABASE_URL` definida no Compose.
 
 ## Variáveis de ambiente
