@@ -21,16 +21,16 @@ TEST_USER="admin@escritorio.com"
 TEST_PASS="admin123"
 
 # ── 1. Aguardar Keycloak ────────────────────────────────────────────────────
-echo "⏳ Aguardando Keycloak em $KC_BASE ..."
+echo "Aguardando Keycloak em $KC_BASE ..."
 i=0
 while [ "$i" -lt 90 ]; do
   if curl -s -o /dev/null -w "%{http_code}" "$KC_BASE/realms/master" 2>/dev/null | grep -q "200"; then
-    echo "✅ Keycloak está pronto!"
+    echo "Keycloak está pronto!"
     break
   fi
   i=$((i + 1))
   if [ "$i" -eq 90 ]; then
-    echo "❌ Keycloak não iniciou a tempo (90 tentativas)"
+    echo "Keycloak não iniciou a tempo (90 tentativas)"
     exit 1
   fi
   sleep 2
@@ -38,7 +38,7 @@ done
 
 # ── 2. Obter admin token ────────────────────────────────────────────────────
 echo ""
-echo "🔑 Obtendo token de admin..."
+echo "Obtendo token de admin..."
 
 # Retry para obter token (Keycloak pode demorar um pouco mais para aceitar logins)
 ADMIN_TOKEN=""
@@ -61,28 +61,28 @@ while [ "$j" -lt 10 ]; do
 done
 
 if [ -z "$ADMIN_TOKEN" ]; then
-  echo "❌ Falha ao obter token de admin após 10 tentativas"
-  echo "   Última resposta: $TOKEN_RESP"
+  echo "Falha ao obter token de admin após 10 tentativas"
+  echo " Última resposta: $TOKEN_RESP"
   exit 1
 fi
-echo "✅ Token de admin obtido"
+echo "Token de admin obtido"
 
 AUTH="Authorization: Bearer $ADMIN_TOKEN"
 
 # ── 3. Criar realm ──────────────────────────────────────────────────────────
 echo ""
-echo "🏠 Criando realm '$REALM'..."
+echo "Criando realm '$REALM'..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms" \
   -H "$AUTH" \
   -H "Content-Type: application/json" \
   -d "{\"realm\": \"$REALM\", \"enabled\": true}")
 
 if [ "$STATUS" = "201" ]; then
-  echo "✅ Realm '$REALM' criado"
+  echo "Realm '$REALM' criado"
 elif [ "$STATUS" = "409" ]; then
-  echo "⏭️  Realm '$REALM' já existe, pulando"
+  echo "Realm '$REALM' já existe, pulando"
 else
-  echo "⚠️  Resposta inesperada ao criar realm: $STATUS"
+  echo "Resposta inesperada ao criar realm: $STATUS"
 fi
 
 # ── 4. Desabilitar Required Actions ─────────────────────────────────────────
@@ -105,18 +105,18 @@ for ACTION in CONFIGURE_TOTP UPDATE_PASSWORD UPDATE_PROFILE VERIFY_EMAIL; do
       -d "$UPDATED_JSON")
 
     if [ "$STATUS" = "204" ]; then
-      echo "  ✅ $ACTION → desabilitado"
+      echo "$ACTION → desabilitado"
     else
-      echo "  ⚠️  $ACTION → resposta $STATUS"
+      echo "$ACTION → resposta $STATUS"
     fi
   else
-    echo "  ⏭️  $ACTION → não encontrado ou já configurado"
+    echo " $ACTION → não encontrado ou já configurado"
   fi
 done
 
 # ── 5. Criar client ─────────────────────────────────────────────────────────
 echo ""
-echo "📦 Criando client '$CLIENT_ID'..."
+echo "Criando client '$CLIENT_ID'..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/clients" \
   -H "$AUTH" \
   -H "Content-Type: application/json" \
@@ -132,11 +132,11 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$
   }")
 
 if [ "$STATUS" = "201" ]; then
-  echo "✅ Client '$CLIENT_ID' criado com secret: $CLIENT_SECRET"
+  echo "Client '$CLIENT_ID' criado com secret: $CLIENT_SECRET"
 elif [ "$STATUS" = "409" ]; then
-  echo "⏭️  Client '$CLIENT_ID' já existe, pulando"
+  echo "Client '$CLIENT_ID' já existe, pulando"
 else
-  echo "⚠️  Resposta inesperada ao criar client: $STATUS"
+  echo "Resposta inesperada ao criar client: $STATUS"
 fi
 
 # ── 6. Criar realm roles ────────────────────────────────────────────────────
@@ -149,11 +149,11 @@ for ROLE in admin advogado estagiario; do
     -d "{\"name\": \"$ROLE\"}")
 
   if [ "$STATUS" = "201" ]; then
-    echo "  ✅ Role '$ROLE' criada"
+    echo "Role '$ROLE' criada"
   elif [ "$STATUS" = "409" ]; then
-    echo "  ⏭️  Role '$ROLE' já existe"
+    echo "Role '$ROLE' já existe"
   else
-    echo "  ⚠️  Role '$ROLE': resposta $STATUS"
+    echo "Role '$ROLE': resposta $STATUS"
   fi
 done
 
@@ -179,16 +179,16 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$
   }")
 
 if [ "$STATUS" = "201" ]; then
-  echo "✅ Usuário '$TEST_USER' criado (senha: $TEST_PASS)"
+  echo "Usuário '$TEST_USER' criado (senha: $TEST_PASS)"
 elif [ "$STATUS" = "409" ]; then
-  echo "⏭️  Usuário '$TEST_USER' já existe, pulando"
+  echo "Usuário '$TEST_USER' já existe, pulando"
 else
-  echo "⚠️  Resposta inesperada ao criar usuário: $STATUS"
+  echo "Resposta inesperada ao criar usuário: $STATUS"
 fi
 
 # ── 8. Atribuir role "admin" ao usuário ─────────────────────────────────────
 echo ""
-echo "🔗 Atribuindo role 'admin' ao usuário..."
+echo "Atribuindo role 'admin' ao usuário..."
 
 # Buscar ID do usuário
 USER_RESP=$(curl -s "$KC_BASE/admin/realms/$REALM/users?username=$TEST_USER&exact=true" \
@@ -197,7 +197,7 @@ USER_RESP=$(curl -s "$KC_BASE/admin/realms/$REALM/users?username=$TEST_USER&exac
 USER_ID=$(echo "$USER_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
 if [ -z "$USER_ID" ]; then
-  echo "⚠️  Não foi possível encontrar o usuário '$TEST_USER' para atribuir a role"
+  echo "Não foi possível encontrar o usuário '$TEST_USER' para atribuir a role"
 else
   # Buscar representação da role "admin"
   ROLE_JSON=$(curl -s "$KC_BASE/admin/realms/$REALM/roles/admin" -H "$AUTH" 2>/dev/null || echo "")
@@ -211,19 +211,19 @@ else
       -d "[$ROLE_JSON]")
 
     if [ "$STATUS" = "204" ]; then
-      echo "✅ Role 'admin' atribuída ao usuário '$TEST_USER'"
+      echo "Role 'admin' atribuída ao usuário '$TEST_USER'"
     else
-      echo "⚠️  Resposta ao atribuir role: $STATUS (pode já estar atribuída)"
+      echo "Resposta ao atribuir role: $STATUS (pode já estar atribuída)"
     fi
   else
-    echo "⚠️  Não foi possível obter a role 'admin'"
+    echo "Não foi possível obter a role 'admin'"
   fi
 fi
 
 # ── Resumo ──────────────────────────────────────────────────────────────────
 echo ""
 echo "════════════════════════════════════════════"
-echo "  ✅ Keycloak configurado com sucesso!"
+echo "Keycloak configurado com sucesso!"
 echo ""
 echo "  Realm:         $REALM"
 echo "  Client ID:     $CLIENT_ID"

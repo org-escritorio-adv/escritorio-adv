@@ -14,7 +14,7 @@ FAIL=0
 
 # ── Obter token JWT do Keycloak ─────────────────────────────────────────────
 echo ""
-echo "🔑 Obtendo token JWT do Keycloak..."
+echo "Obtendo token JWT do Keycloak..."
 
 TOKEN_RESPONSE=$(curl -sf -X POST "$KC_BASE/realms/$REALM/protocol/openid-connect/token" \
   -d "client_id=$CLIENT_ID" \
@@ -22,18 +22,18 @@ TOKEN_RESPONSE=$(curl -sf -X POST "$KC_BASE/realms/$REALM/protocol/openid-connec
   -d "username=$TEST_USER" \
   -d "password=$TEST_PASS" \
   -d "grant_type=password" 2>&1) || {
-  echo "❌ Falha ao obter token do Keycloak"
+  echo "Falha ao obter token do Keycloak"
   echo "   Resposta: $TOKEN_RESPONSE"
   exit 1
 }
 
 TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null) || {
-  echo "❌ Falha ao extrair access_token da resposta"
+  echo "Falha ao extrair access_token da resposta"
   echo "   Resposta: $TOKEN_RESPONSE"
   exit 1
 }
 
-echo "✅ Token obtido com sucesso"
+echo "Token obtido com sucesso"
 echo ""
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -48,26 +48,26 @@ assert_status() {
     "${extra_args[@]}" "$url")
 
   if [[ "$actual" == "$expected" ]]; then
-    echo "  ✅ $method $url → $actual"
+    echo "$method $url → $actual"
     ((PASS++))
   else
-    echo "  ❌ $method $url → $actual (expected $expected)"
+    echo "$method $url → $actual (expected $expected)"
     ((FAIL++))
   fi
 }
 
-echo "🔥 Smoke Tests — API REST (com autenticação Keycloak)"
+echo "Smoke Tests — API REST (com autenticação Keycloak)"
 echo "─────────────────────────────────────────────────────"
 
 echo ""
-echo "📌 Health (sem auth)"
+echo "Health (sem auth)"
 # Health check não requer autenticação
 actual=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/")
 if [[ "$actual" == "200" ]]; then
-  echo "  ✅ GET $BASE/ → $actual"
+  echo "GET $BASE/ → $actual"
   ((PASS++))
 else
-  echo "  ❌ GET $BASE/ → $actual (expected 200)"
+  echo "GET $BASE/ → $actual (expected 200)"
   ((FAIL++))
 fi
 
@@ -75,7 +75,7 @@ ENDPOINTS=(processos clientes leads usuarios prazos tarefas movimentacoes)
 
 for ep in "${ENDPOINTS[@]}"; do
   echo ""
-  echo "📌 /$ep"
+  echo "/$ep"
 
   # CREATE
   assert_status POST "$BASE/$ep/" 201 \
@@ -98,7 +98,7 @@ for ep in "${ENDPOINTS[@]}"; do
 done
 
 echo ""
-echo "📌 /datajud (sem corpo / sem API key — deve retornar 4xx)"
+echo "/datajud (sem corpo / sem API key — deve retornar 4xx)"
 
 assert_status POST "$BASE/datajud/consultar" 422 \
   -H "Content-Type: application/json" \
@@ -114,7 +114,7 @@ assert_status GET "$BASE/datajud/listar/TJSP" 200
 
 echo ""
 echo "════════════════════════════"
-echo "  Results: ✅ $PASS passed · ❌ $FAIL failed"
+echo "  Results: $PASS passed · $FAIL failed"
 echo "════════════════════════════"
 
 if [[ "$FAIL" -gt 0 ]]; then
@@ -122,4 +122,4 @@ if [[ "$FAIL" -gt 0 ]]; then
 fi
 
 echo ""
-echo "🎉 All smoke tests passed!"
+echo "All smoke tests passed!"
