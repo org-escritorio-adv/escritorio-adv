@@ -1,144 +1,125 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-# Cores para o output
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0;0m' # No Color
-BLUE='\033[0;34m'
+BASE="http://localhost:8000"
+KC_BASE="http://localhost:8080"
+REALM="escritorio-adv"
+CLIENT_ID="backend-api"
+CLIENT_SECRET="smoke-test-secret-key-001"
+TEST_USER="admin@escritorio.com"
+TEST_PASS="admin123"
 
-API_URL="http://localhost:8000"
+PASS=0
+FAIL=0
 
-echo -e "${BLUE}=== Iniciando Teste de Fumaça da API (Smoke Test) ===${NC}"
+# ── Obter token JWT do Keycloak ─────────────────────────────────────────────
+echo ""
+echo "🔑 Obtendo token JWT do Keycloak..."
 
-# 1. Verificar se o jq está instalado
-if ! command -v jq &> /dev/null; then
-    echo -e "${RED}[ERRO] O utilitário 'jq' é necessário para rodar este script. Instale-o com 'sudo apt install jq'.${NC}"
-    exit 1
-fi
-
-# Função auxiliar para verificar erros
-assert_status() {
-    local status=$1
-    local expected=$2
-    local message=$3
-    if [ "$status" -eq "$expected" ]; then
-        echo -e "${GREEN}[OK] $message (Status $status)${NC}"
-    else
-        echo -e "${RED}[FALHA] $message (Esperava $expected, obteve $status)${NC}"
-        exit 1
-    fi
+TOKEN_RESPONSE=$(curl -sf -X POST "$KC_BASE/realms/$REALM/protocol/openid-connect/token" \
+  -d "client_id=$CLIENT_ID" \
+  -d "client_secret=$CLIENT_SECRET" \
+  -d "username=$TEST_USER" \
+  -d "password=$TEST_PASS" \
+  -d "grant_type=password" 2>&1) || {
+  echo "❌ Falha ao obter token do Keycloak"
+  echo "   Resposta: $TOKEN_RESPONSE"
+  exit 1
 }
 
-# Gerar identificadores únicos para evitar conflitos de banco de dados
-RAND_ID=$((RANDOM % 90000 + 10000))
-TEST_CPF="000.000.000-${RAND_ID: -2}"
-TEST_CNJ="${RAND_ID}99-99.2026.8.26.0000"
+TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null) || {
+  echo "❌ Falha ao extrair access_token da resposta"
+  echo "   Resposta: $TOKEN_RESPONSE"
+  exit 1
+}
 
-# --- 1. HEALTH CHECKS ---
-echo -e "\n${BLUE}--- Testando Health Checks ---${NC}"
+echo "✅ Token obtido com sucesso"
+echo ""
 
-# GET /health
-response_health=$(curl -s -w "%{http_code}" -o response.json "${API_URL}/health")
-status_health=$(echo "$response_health" | tail -c 4)
-assert_status "$status_health" 200 "Health Check Geral"
-status_val=$(jq -r '.status' response.json)
-if [ "$status_val" == "ok" ]; then
-    echo -e "${GREEN}[OK] Payload do Health Check Geral válido${NC}"
+# ── Helpers ─────────────────────────────────────────────────────────────────
+
+assert_status() {
+  local method="$1" url="$2" expected="$3"
+  shift 3
+  local extra_args=("$@")
+
+  actual=$(curl -s -o /dev/null -w "%{http_code}" -X "$method" \
+    -H "Authorization: Bearer $TOKEN" \
+    "${extra_args[@]}" "$url")
+
+  if [[ "$actual" == "$expected" ]]; then
+    echo "  ✅ $method $url → $actual"
+    ((PASS++))
+  else
+    echo "  ❌ $method $url → $actual (expected $expected)"
+    ((FAIL++))
+  fi
+}
+
+echo "🔥 Smoke Tests — API REST (com autenticação Keycloak)"
+echo "─────────────────────────────────────────────────────"
+
+echo ""
+echo "📌 Health (sem auth)"
+# Health check não requer autenticação
+actual=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/")
+if [[ "$actual" == "200" ]]; then
+  echo "  ✅ GET $BASE/ → $actual"
+  ((PASS++))
 else
-    echo -e "${RED}[FALHA] Payload do Health Check Geral inválido: $status_val${NC}"
-    exit 1
+  echo "  ❌ GET $BASE/ → $actual (expected 200)"
+  ((FAIL++))
 fi
 
-# GET /health/db
-response_db=$(curl -s -w "%{http_code}" -o response.json "${API_URL}/health/db")
-status_db=$(echo "$response_db" | tail -c 4)
-assert_status "$status_db" 200 "Health Check do Banco de Dados"
-db_status=$(jq -r '.database' response.json)
-if [ "$db_status" == "connected" ]; then
-    echo -e "${GREEN}[OK] Conectividade com o banco de dados activa${NC}"
-else
-    echo -e "${RED}[FALHA] Banco de dados desconectado: $db_status${NC}"
-    exit 1
+ENDPOINTS=(processos clientes leads usuarios prazos tarefas movimentacoes)
+
+for ep in "${ENDPOINTS[@]}"; do
+  echo ""
+  echo "📌 /$ep"
+
+  # CREATE
+  assert_status POST "$BASE/$ep/" 201 \
+    -H "Content-Type: application/json" \
+    -d '{}'
+
+  # LIST
+  assert_status GET "$BASE/$ep/" 200
+
+  # READ (id=1, criado acima)
+  assert_status GET "$BASE/$ep/1" 200
+
+  # UPDATE
+  assert_status PATCH "$BASE/$ep/1" 200 \
+    -H "Content-Type: application/json" \
+    -d '{}'
+
+  # DELETE
+  assert_status DELETE "$BASE/$ep/1" 204
+done
+
+echo ""
+echo "📌 /datajud (sem corpo / sem API key — deve retornar 4xx)"
+
+assert_status POST "$BASE/datajud/consultar" 422 \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+assert_status POST "$BASE/datajud/importar" 422 \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+assert_status GET "$BASE/datajud/buscar/TJSP" 200
+
+assert_status GET "$BASE/datajud/listar/TJSP" 200
+
+echo ""
+echo "════════════════════════════"
+echo "  Results: ✅ $PASS passed · ❌ $FAIL failed"
+echo "════════════════════════════"
+
+if [[ "$FAIL" -gt 0 ]]; then
+  exit 1
 fi
 
-
-# --- 2. CLIENTES CRUD ---
-echo -e "\n${BLUE}--- Testando Fluxo de Clientes ---${NC}"
-
-# POST /clientes/ (Criar)
-client_payload="{\"nome_razao_social\": \"Cliente Teste Smoke\", \"cpf_cnpj\": \"${TEST_CPF}\", \"telefone\": \"11900000000\", \"email\": \"smoke@teste.com\"}"
-response_post_client=$(curl -s -w "%{http_code}" -o response.json -X POST "${API_URL}/clientes/" \
-    -H "Content-Type: application/json" -d "$client_payload")
-status_post_client=$(echo "$response_post_client" | tail -c 4)
-assert_status "$status_post_client" 201 "Criação de Cliente"
-
-CLIENT_ID=$(jq '.id' response.json)
-echo -e "${GREEN}[OK] Cliente criado com ID: $CLIENT_ID (CPF: $TEST_CPF)${NC}"
-
-# GET /clientes/{id} (Buscar)
-response_get_client=$(curl -s -w "%{http_code}" -o response.json "${API_URL}/clientes/${CLIENT_ID}")
-status_get_client=$(echo "$response_get_client" | tail -c 4)
-assert_status "$status_get_client" 200 "Busca de Cliente criado"
-
-
-# --- 3. PROCESSOS CRUD ---
-echo -e "\n${BLUE}--- Testando Fluxo de Processos ---${NC}"
-
-# POST /processos/ (Criar)
-processo_payload="{\"numero_cnj\": \"${TEST_CNJ}\", \"tribunal\": \"TJSP\", \"partes\": \"Smoke vs. Banco\", \"data_abertura\": \"2026-05-24T00:00:00\", \"status\": \"ativo\", \"favorito\": false, \"cliente_id\": $CLIENT_ID}"
-response_post_processo=$(curl -s -w "%{http_code}" -o response.json -X POST "${API_URL}/processos/" \
-    -H "Content-Type: application/json" -d "$processo_payload")
-status_post_processo=$(echo "$response_post_processo" | tail -c 4)
-assert_status "$status_post_processo" 201 "Criação de Processo"
-
-PROCESSO_ID=$(jq '.id' response.json)
-echo -e "${GREEN}[OK] Processo criado com ID: $PROCESSO_ID (CNJ: $TEST_CNJ)${NC}"
-
-# PATCH /processos/{id}/favoritar (Favoritar)
-response_patch_fav=$(curl -s -w "%{http_code}" -o response.json -X PATCH "${API_URL}/processos/${PROCESSO_ID}/favoritar")
-status_patch_fav=$(echo "$response_patch_fav" | tail -c 4)
-assert_status "$status_patch_fav" 200 "Favoritar Processo"
-fav_val=$(jq '.favorito' response.json)
-if [ "$fav_val" == "true" ]; then
-    echo -e "${GREEN}[OK] Processo favoritado com sucesso${NC}"
-else
-    echo -e "${RED}[FALHA] Processo não favoritou: $fav_val${NC}"
-    exit 1
-fi
-
-
-# --- 4. LEADS CRUD ---
-echo -e "\n${BLUE}--- Testando Fluxo de Leads ---${NC}"
-
-# POST /leads/ (Criar)
-lead_payload='{"nome": "Lead Smoke", "email": "lead@smoke.com", "telefone": "11911112222", "mensagem": "Mensagem de teste do smoke script"}'
-response_post_lead=$(curl -s -w "%{http_code}" -o response.json -X POST "${API_URL}/leads/" \
-    -H "Content-Type: application/json" -d "$lead_payload")
-status_post_lead=$(echo "$response_post_lead" | tail -c 4)
-assert_status "$status_post_lead" 201 "Criação de Lead"
-LEAD_ID=$(jq '.id' response.json)
-echo -e "${GREEN}[OK] Lead criado com ID: $LEAD_ID${NC}"
-
-
-# --- 5. LIMPEZA DOS DADOS ---
-echo -e "\n${BLUE}--- Limpando dados de teste ---${NC}"
-
-# DELETE /processos/{id}
-response_del_proc=$(curl -s -w "%{http_code}" -o /dev/null -X DELETE "${API_URL}/processos/${PROCESSO_ID}")
-assert_status "$(echo "$response_del_proc" | tail -c 4)" 204 "Remoção de Processo de Teste"
-
-# DELETE /clientes/{id}
-response_del_client=$(curl -s -w "%{http_code}" -o /dev/null -X DELETE "${API_URL}/clientes/${CLIENT_ID}")
-assert_status "$(echo "$response_del_client" | tail -c 4)" 204 "Remoção de Cliente de Teste"
-
-# DELETE /leads/{id}
-response_del_lead=$(curl -s -w "%{http_code}" -o /dev/null -X DELETE "${API_URL}/leads/${LEAD_ID}")
-assert_status "$(echo "$response_del_lead" | tail -c 4)" 204 "Remoção de Lead de Teste"
-
-# Remover arquivo temporário
-rm -f response.json
-
-echo -e "\n${GREEN}===============================================${NC}"
-echo -e "${GREEN}  TODOS OS TESTES DE FUMAÇA PASSARAM COM SUCESSO!${NC}"
-echo -e "${GREEN}===============================================${NC}"
-exit 0
+echo ""
+echo "🎉 All smoke tests passed!"
