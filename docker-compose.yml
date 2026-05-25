@@ -34,7 +34,10 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready || exit 1"]
+    # curl na porta 9000 pode falhar dependendo da configuração/versione do Keycloak.
+    # Alternativa:
+    # test: ["CMD-SHELL", "curl -sf http://localhost:8080/realms/master || exit 1"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/realms/master || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 18
