@@ -13,12 +13,11 @@ jobs:
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.SUBMODULE_TOKEN }}
-          submodules: recursive
 
-      - name: Atualizar submodules para latest da main
-        run: git submodule update --remote
+      - name: Checkout dos submodules
+        run: |
+          git config --global url."https://x-access-token:${{ secrets.SUBMODULE_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive --remote
 
       - name: Subir serviços com Docker Compose
         run: docker compose up -d --build
