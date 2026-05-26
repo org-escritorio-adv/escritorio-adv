@@ -33,21 +33,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-    # curl na porta 9000 pode falhar dependendo da configuração/versione do Keycloak.
-    # Alternativa:
-    # test: ["CMD-SHELL", "curl -sf http://localhost:8080/realms/master || exit 1"]
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/realms/master || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 18
-      start_period: 40s
 
   keycloak-setup:
     image: curlimages/curl:8.13.0
     depends_on:
       keycloak:
-        condition: service_healthy
+        condition: service_started
     volumes:
       - ./scripts/setup-keycloak.sh:/setup.sh:ro
     entrypoint: ["sh", "/setup.sh"]

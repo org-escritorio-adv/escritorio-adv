@@ -5,9 +5,48 @@ BASE="http://localhost:8000"
 KC_BASE="http://localhost:8080"
 REALM="escritorio-adv"
 CLIENT_ID="backend-api"
-CLIENT_SECRET="smoke-test-secret-key-001"
+KC_ADMIN_USER="admin"
+KC_ADMIN_PASS="admin"
 TEST_USER="admin@escritorio.com"
 TEST_PASS="admin123"
+
+# ── Obter segredo do client dinamicamente do Keycloak ──────────────────────────
+echo ""
+echo "Obtendo segredo do client '$CLIENT_ID' do Keycloak..."
+
+ADMIN_TOKEN_RESPONSE=$(curl -s -X POST "$KC_BASE/realms/master/protocol/openid-connect/token" \
+  -d "client_id=admin-cli" \
+  -d "username=$KC_ADMIN_USER" \
+  -d "password=$KC_ADMIN_PASS" \
+  -d "grant_type=password" 2>/dev/null || echo "")
+
+ADMIN_TOKEN=$(echo "$ADMIN_TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || echo "")
+
+if [[ -z "$ADMIN_TOKEN" ]]; then
+  echo "Falha ao obter token de admin do Keycloak"
+  echo "   Resposta: $ADMIN_TOKEN_RESPONSE"
+  exit 1
+fi
+
+CLIENT_UUID=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "$KC_BASE/admin/realms/$REALM/clients?clientId=$CLIENT_ID" 2>/dev/null \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" 2>/dev/null || echo "")
+
+if [[ -z "$CLIENT_UUID" ]]; then
+  echo "Não foi possível encontrar o UUID do client '$CLIENT_ID'"
+  exit 1
+fi
+
+CLIENT_SECRET=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
+  "$KC_BASE/admin/realms/$REALM/clients/$CLIENT_UUID/client-secret" 2>/dev/null \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])" 2>/dev/null || echo "")
+
+if [[ -z "$CLIENT_SECRET" ]]; then
+  echo "Falha ao obter o Client Secret do Keycloak"
+  exit 1
+fi
+
+echo "Segredo do client obtido com sucesso"
 
 PASS=0
 FAIL=0
@@ -16,24 +55,31 @@ FAIL=0
 echo ""
 echo "Obtendo token JWT do Keycloak..."
 
-TOKEN_RESPONSE=$(curl -sf -X POST "$KC_BASE/realms/$REALM/protocol/openid-connect/token" \
-  -d "client_id=$CLIENT_ID" \
-  -d "client_secret=$CLIENT_SECRET" \
-  -d "username=$TEST_USER" \
-  -d "password=$TEST_PASS" \
-  -d "grant_type=password" 2>&1) || {
-  echo "Falha ao obter token do Keycloak"
-  echo "   Resposta: $TOKEN_RESPONSE"
-  exit 1
-}
+TOKEN=""
+for attempt in $(seq 1 15); do
+  TOKEN_RESPONSE=$(curl -s -X POST "$KC_BASE/realms/$REALM/protocol/openid-connect/token" \
+    -d "client_id=$CLIENT_ID" \
+    -d "client_secret=$CLIENT_SECRET" \
+    -d "username=$TEST_USER" \
+    -d "password=$TEST_PASS" \
+    -d "grant_type=password" 2>/dev/null || echo "")
 
-TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null) || {
-  echo "Falha ao extrair access_token da resposta"
-  echo "   Resposta: $TOKEN_RESPONSE"
-  exit 1
-}
+  TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || echo "")
 
-echo "Token obtido com sucesso"
+  if [[ -n "$TOKEN" ]]; then
+    echo "Token obtido com sucesso"
+    break
+  fi
+
+  echo "  tentativa $attempt/15... (Keycloak pode estar iniciando)"
+  sleep 3
+done
+
+if [[ -z "$TOKEN" ]]; then
+  echo "Falha ao obter token do Keycloak após 15 tentativas"
+  echo "   Última resposta: $TOKEN_RESPONSE"
+  exit 1
+fi
 echo ""
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -49,11 +95,67 @@ assert_status() {
 
   if [[ "$actual" == "$expected" ]]; then
     echo "$method $url → $actual"
-    ((PASS++))
+    PASS=$((PASS + 1))
   else
     echo "$method $url → $actual (expected $expected)"
-    ((FAIL++))
+    FAIL=$((FAIL + 1))
   fi
+}
+
+CREATED_ID=""
+create_resource() {
+  local ep="$1" payload="$2" expected="$3"
+  
+  local response
+  response=$(curl -s -w "\n%{http_code}" -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "$payload" \
+    "$BASE/$ep/")
+    
+  local actual
+  actual=$(echo "$response" | tail -n1)
+  local body
+  body=$(echo "$response" | sed '$d')
+  
+  if [[ "$actual" == "$expected" ]]; then
+    echo "POST $BASE/$ep/ → $actual"
+    PASS=$((PASS + 1))
+    CREATED_ID=$(echo "$body" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id', ''))" 2>/dev/null || echo "")
+  else
+    echo "POST $BASE/$ep/ → $actual (expected $expected)"
+    echo "  Response body: $body"
+    FAIL=$((FAIL + 1))
+    CREATED_ID=""
+  fi
+}
+
+get_payload() {
+  local ep="$1"
+  local proc_id="$2"
+  case "$ep" in
+    processos)
+      echo '{"numero_cnj": "0001234-56.2023.8.26.0000", "tribunal": "TJSP"}'
+      ;;
+    clientes)
+      echo '{"nome_razao_social": "Cliente Teste", "cpf_cnpj": "123.456.789-00"}'
+      ;;
+    leads)
+      echo '{"nome": "Lead site Teste", "email": "lead@site.com"}'
+      ;;
+    usuarios)
+      echo '{"nome": "Novo Usuario", "email": "novo.user@escritorio.com", "senha": "senhaSegura123", "perfil": "advogado"}'
+      ;;
+    prazos)
+      echo "{\"titulo\": \"Prazo Teste\", \"data_limite\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\", \"processo_id\": $proc_id}"
+      ;;
+    tarefas)
+      echo '{"titulo": "Tarefa Teste"}'
+      ;;
+    movimentacoes)
+      echo "{\"data\": \"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\", \"descricao\": \"Movimentação de teste\", \"processo_id\": $proc_id}"
+      ;;
+  esac
 }
 
 echo "Smoke Tests — API REST (com autenticação Keycloak)"
@@ -65,37 +167,57 @@ echo "Health (sem auth)"
 actual=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/")
 if [[ "$actual" == "200" ]]; then
   echo "GET $BASE/ → $actual"
-  ((PASS++))
+  PASS=$((PASS + 1))
 else
   echo "GET $BASE/ → $actual (expected 200)"
-  ((FAIL++))
+  FAIL=$((FAIL + 1))
 fi
 
-ENDPOINTS=(processos clientes leads usuarios prazos tarefas movimentacoes)
+# Cria processo pai persistente para relacionamentos
+echo ""
+echo "Criando processo base para relacionamentos..."
+create_resource "processos" '{"numero_cnj": "9999999-99.2023.8.26.9999", "tribunal": "TJSP"}' 201
+PROCESSO_ID="$CREATED_ID"
+
+if [[ -z "$PROCESSO_ID" ]]; then
+  echo "Falha ao criar processo base para relacionamentos. Abortando testes."
+  exit 1
+fi
+
+ENDPOINTS=("processos" "clientes" "leads" "usuarios" "prazos" "tarefas" "movimentacoes")
 
 for ep in "${ENDPOINTS[@]}"; do
   echo ""
   echo "/$ep"
 
+  payload=$(get_payload "$ep" "$PROCESSO_ID")
+
   # CREATE
-  assert_status POST "$BASE/$ep/" 201 \
-    -H "Content-Type: application/json" \
-    -d '{}'
+  create_resource "$ep" "$payload" 201
+  
+  if [[ -n "$CREATED_ID" ]]; then
+    # LIST
+    assert_status GET "$BASE/$ep/" 200
 
-  # LIST
-  assert_status GET "$BASE/$ep/" 200
+    # READ
+    assert_status GET "$BASE/$ep/$CREATED_ID" 200
 
-  # READ (id=1, criado acima)
-  assert_status GET "$BASE/$ep/1" 200
+    # UPDATE
+    assert_status PATCH "$BASE/$ep/$CREATED_ID" 200 \
+      -H "Content-Type: application/json" \
+      -d '{}'
 
-  # UPDATE
-  assert_status PATCH "$BASE/$ep/1" 200 \
-    -H "Content-Type: application/json" \
-    -d '{}'
-
-  # DELETE
-  assert_status DELETE "$BASE/$ep/1" 204
+    # DELETE
+    assert_status DELETE "$BASE/$ep/$CREATED_ID" 204
+  else
+    echo "  Ignorando GET/PATCH/DELETE pois a criação falhou."
+  fi
 done
+
+# Limpa processo base persistente
+echo ""
+echo "Limpando processo base..."
+assert_status DELETE "$BASE/processos/$PROCESSO_ID" 204
 
 echo ""
 echo "/datajud (sem corpo / sem API key — deve retornar 4xx)"
@@ -108,7 +230,8 @@ assert_status POST "$BASE/datajud/importar" 422 \
   -H "Content-Type: application/json" \
   -d '{}'
 
-assert_status GET "$BASE/datajud/buscar/TJSP" 200
+# Requer ao menos um filtro na busca (ex: oab)
+assert_status GET "$BASE/datajud/buscar/TJSP?oab=12345" 200
 
 assert_status GET "$BASE/datajud/listar/TJSP" 200
 
@@ -123,3 +246,4 @@ fi
 
 echo ""
 echo "All smoke tests passed!"
+
