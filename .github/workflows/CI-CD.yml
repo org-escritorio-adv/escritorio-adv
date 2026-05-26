@@ -41,8 +41,8 @@ jobs:
       - name: Instalar jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Rodar Smoke Tests
-        run: bash scripts/smoke-api.sh
+      - name: Rodar Testes de Integração
+        run: bash scripts/test_Integracao.sh
 
       - name: Mostrar logs em caso de falha
         if: failure()

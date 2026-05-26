@@ -81,7 +81,7 @@ docker-compose down
 | Health + banco  | http://localhost:8000/health/db |
 | Frontend (Vite) | http://localhost:3000 |
 
-## Como executar o Smoke de Teste
+## Como executar o Teste de Integração
 
 Instale o jq se não possuir:
 
@@ -92,8 +92,8 @@ sudo apt install jq
 Torne o arquivo executavel e execute:
 
 ```bash
-chmod +x scripts/smoke-api.sh
-./scripts/smoke-api.sh
+chmod +x scripts/test_Integracao.sh
+./scripts/test_Integracao.sh
 ```
 
 
