@@ -1,0 +1,235 @@
+#!/bin/sh
+# ──────────────────────────────────────────────────────────────────────────────
+# setup-keycloak.sh
+#
+# Configura automaticamente o Keycloak via Admin REST API:
+#   1. Aguarda o Keycloak ficar pronto
+#   2. Cria o realm "escritorio-adv"
+#   3. Desabilita required actions (OTP, Update Password, etc.)
+#   4. Cria o client "backend-api" (confidential, direct access grants)
+#   5. Cria as realm roles: admin, advogado, estagiario
+#   6. Cria um usuário de teste admin@escritorio.com com role "admin"
+#
+# Idempotente: pode rodar múltiplas vezes sem erro.
+# ──────────────────────────────────────────────────────────────────────────────
+
+KC_BASE="http://keycloak:8080"
+REALM="escritorio-adv"
+CLIENT_ID="backend-api"
+CLIENT_SECRET="smoke-test-secret-key-001"
+TEST_USER="admin@escritorio.com"
+TEST_PASS="admin123"
+
+# ── 1. Aguardar Keycloak ────────────────────────────────────────────────────
+echo "Aguardando Keycloak em $KC_BASE ..."
+i=0
+while [ "$i" -lt 90 ]; do
+  if curl -s -o /dev/null -w "%{http_code}" "$KC_BASE/realms/master" 2>/dev/null | grep -q "200"; then
+    echo "Keycloak está pronto!"
+    break
+  fi
+  i=$((i + 1))
+  if [ "$i" -eq 90 ]; then
+    echo "Keycloak não iniciou a tempo (90 tentativas)"
+    exit 1
+  fi
+  sleep 2
+done
+
+# ── 2. Obter admin token ────────────────────────────────────────────────────
+echo ""
+echo "Obtendo token de admin..."
+
+# Retry para obter token (Keycloak pode demorar um pouco mais para aceitar logins)
+ADMIN_TOKEN=""
+j=0
+while [ "$j" -lt 10 ]; do
+  TOKEN_RESP=$(curl -s -X POST "$KC_BASE/realms/master/protocol/openid-connect/token" \
+    -d "client_id=admin-cli" \
+    -d "username=admin" \
+    -d "password=admin" \
+    -d "grant_type=password" 2>/dev/null || echo "")
+
+  ADMIN_TOKEN=$(echo "$TOKEN_RESP" | sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+  if [ -n "$ADMIN_TOKEN" ]; then
+    break
+  fi
+  j=$((j + 1))
+  echo "  tentativa $j/10..."
+  sleep 3
+done
+
+if [ -z "$ADMIN_TOKEN" ]; then
+  echo "Falha ao obter token de admin após 10 tentativas"
+  echo " Última resposta: $TOKEN_RESP"
+  exit 1
+fi
+echo "Token de admin obtido"
+
+AUTH="Authorization: Bearer $ADMIN_TOKEN"
+
+# ── 3. Criar realm ──────────────────────────────────────────────────────────
+echo ""
+echo "Criando realm '$REALM'..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "{\"realm\": \"$REALM\", \"enabled\": true}")
+
+if [ "$STATUS" = "201" ]; then
+  echo "Realm '$REALM' criado"
+elif [ "$STATUS" = "409" ]; then
+  echo "Realm '$REALM' já existe, pulando"
+else
+  echo "Resposta inesperada ao criar realm: $STATUS"
+fi
+
+# ── 4. Desabilitar Required Actions ─────────────────────────────────────────
+echo ""
+echo "🔧 Desabilitando required actions no realm '$REALM'..."
+
+for ACTION in CONFIGURE_TOTP UPDATE_PASSWORD UPDATE_PROFILE VERIFY_EMAIL; do
+  # Obter a config atual da action
+  ACTION_JSON=$(curl -s "$KC_BASE/admin/realms/$REALM/authentication/required-actions/$ACTION" \
+    -H "$AUTH" 2>/dev/null || echo "")
+
+  if [ -n "$ACTION_JSON" ] && echo "$ACTION_JSON" | grep -q "alias"; then
+    # Substituir "enabled":true por "enabled":false
+    UPDATED_JSON=$(echo "$ACTION_JSON" | sed 's/"enabled"[[:space:]]*:[[:space:]]*true/"enabled":false/g' | sed 's/"defaultAction"[[:space:]]*:[[:space:]]*true/"defaultAction":false/g')
+
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+      "$KC_BASE/admin/realms/$REALM/authentication/required-actions/$ACTION" \
+      -H "$AUTH" \
+      -H "Content-Type: application/json" \
+      -d "$UPDATED_JSON")
+
+    if [ "$STATUS" = "204" ]; then
+      echo "$ACTION → desabilitado"
+    else
+      echo "$ACTION → resposta $STATUS"
+    fi
+  else
+    echo " $ACTION → não encontrado ou já configurado"
+  fi
+done
+
+# ── 5. Criar client ─────────────────────────────────────────────────────────
+echo ""
+echo "Criando client '$CLIENT_ID'..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/clients" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"clientId\": \"$CLIENT_ID\",
+    \"enabled\": true,
+    \"protocol\": \"openid-connect\",
+    \"publicClient\": false,
+    \"secret\": \"$CLIENT_SECRET\",
+    \"directAccessGrantsEnabled\": true,
+    \"standardFlowEnabled\": true,
+    \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+  }")
+
+if [ "$STATUS" = "201" ]; then
+  echo "Client '$CLIENT_ID' criado com secret: $CLIENT_SECRET"
+elif [ "$STATUS" = "409" ]; then
+  echo "Client '$CLIENT_ID' já existe, pulando"
+else
+  echo "Resposta inesperada ao criar client: $STATUS"
+fi
+
+# ── 6. Criar realm roles ────────────────────────────────────────────────────
+echo ""
+echo "🎭 Criando realm roles..."
+for ROLE in admin advogado estagiario; do
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/roles" \
+    -H "$AUTH" \
+    -H "Content-Type: application/json" \
+    -d "{\"name\": \"$ROLE\"}")
+
+  if [ "$STATUS" = "201" ]; then
+    echo "Role '$ROLE' criada"
+  elif [ "$STATUS" = "409" ]; then
+    echo "Role '$ROLE' já existe"
+  else
+    echo "Role '$ROLE': resposta $STATUS"
+  fi
+done
+
+# ── 7. Criar usuário de teste ───────────────────────────────────────────────
+echo ""
+echo "👤 Criando usuário de teste '$TEST_USER'..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/users" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"username\": \"$TEST_USER\",
+    \"email\": \"$TEST_USER\",
+    \"firstName\": \"Admin\",
+    \"lastName\": \"Teste\",
+    \"enabled\": true,
+    \"emailVerified\": true,
+    \"credentials\": [{
+      \"type\": \"password\",
+      \"value\": \"$TEST_PASS\",
+      \"temporary\": false
+    }],
+    \"requiredActions\": []
+  }")
+
+if [ "$STATUS" = "201" ]; then
+  echo "Usuário '$TEST_USER' criado (senha: $TEST_PASS)"
+elif [ "$STATUS" = "409" ]; then
+  echo "Usuário '$TEST_USER' já existe, pulando"
+else
+  echo "Resposta inesperada ao criar usuário: $STATUS"
+fi
+
+# ── 8. Atribuir role "admin" ao usuário ─────────────────────────────────────
+echo ""
+echo "Atribuindo role 'admin' ao usuário..."
+
+# Buscar ID do usuário
+USER_RESP=$(curl -s "$KC_BASE/admin/realms/$REALM/users?username=$TEST_USER&exact=true" \
+  -H "$AUTH" 2>/dev/null || echo "[]")
+
+USER_ID=$(echo "$USER_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+if [ -z "$USER_ID" ]; then
+  echo "Não foi possível encontrar o usuário '$TEST_USER' para atribuir a role"
+else
+  # Buscar representação da role "admin"
+  ROLE_JSON=$(curl -s "$KC_BASE/admin/realms/$REALM/roles/admin" -H "$AUTH" 2>/dev/null || echo "")
+
+  if [ -n "$ROLE_JSON" ] && echo "$ROLE_JSON" | grep -q "name"; then
+    # Atribuir role ao usuário
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+      "$KC_BASE/admin/realms/$REALM/users/$USER_ID/role-mappings/realm" \
+      -H "$AUTH" \
+      -H "Content-Type: application/json" \
+      -d "[$ROLE_JSON]")
+
+    if [ "$STATUS" = "204" ]; then
+      echo "Role 'admin' atribuída ao usuário '$TEST_USER'"
+    else
+      echo "Resposta ao atribuir role: $STATUS (pode já estar atribuída)"
+    fi
+  else
+    echo "Não foi possível obter a role 'admin'"
+  fi
+fi
+
+# ── Resumo ──────────────────────────────────────────────────────────────────
+echo ""
+echo "════════════════════════════════════════════"
+echo "Keycloak configurado com sucesso!"
+echo ""
+echo "  Realm:         $REALM"
+echo "  Client ID:     $CLIENT_ID"
+echo "  Client Secret: $CLIENT_SECRET"
+echo "  Usuário:       $TEST_USER"
+echo "  Senha:         $TEST_PASS"
+echo "  Role:          admin"
+echo "════════════════════════════════════════════"
+echo ""

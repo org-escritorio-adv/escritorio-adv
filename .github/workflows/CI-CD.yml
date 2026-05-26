@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Checkout do repositório com submodules
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SUBMODULE_TOKEN }}
+          submodules: recursive
+
+      - name: Subir serviços com Docker Compose
+        run: docker compose up -d --build
+
+      - name: Aguardar backend ficar pronto
+        run: |
+          echo "Aguardando o backend responder em http://localhost:8000/health ..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "Backend pronto!"
+              exit 0
+            fi
+            echo "Tentativa $i/30 — aguardando 2s..."
+            sleep 2
+          done
+          echo "ERRO: Backend não ficou pronto em 60s"
+          docker compose logs backend
+          exit 1
+
+      - name: Instalar jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Rodar Smoke Tests
+        run: bash scripts/smoke-api.sh
+
+      - name: Mostrar logs em caso de falha
+        if: failure()
+        run: docker compose logs
+
+      - name: Derrubar serviços
+        if: always()
+        run: docker compose down -v

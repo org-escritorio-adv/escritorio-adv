@@ -16,6 +16,33 @@ services:
       timeout: 5s
       retries: 5
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/org-escritorio-adv
+      KC_DB_USERNAME: org-escritorio-adv
+      KC_DB_PASSWORD: org-escritorio-adv
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  keycloak-setup:
+    image: curlimages/curl:8.13.0
+    depends_on:
+      keycloak:
+        condition: service_started
+    volumes:
+      - ./scripts/setup-keycloak.sh:/setup.sh:ro
+    entrypoint: ["sh", "/setup.sh"]
+
   backend:
     build: ./backend
     ports:
@@ -24,9 +51,14 @@ services:
       - ./backend:/app
     environment:
       DATABASE_URL: postgresql+psycopg2://org-escritorio-adv:org-escritorio-adv@postgres:5432/org-escritorio-adv
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: escritorio-adv
+      KEYCLOAK_CLIENT_ID: backend-api
     depends_on:
       postgres:
         condition: service_healthy
+      keycloak-setup:
+        condition: service_completed_successfully
 
   frontend:
     build: ./frontend
