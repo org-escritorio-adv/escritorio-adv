@@ -21,6 +21,8 @@ jobs:
           submodules: recursive
 
       - name: Subir serviços com Docker Compose
+        env:
+          DATAJUD_API_KEY: ${{ secrets.DATAJUD_API_KEY }}
         run: docker compose up -d --build
 
       - name: Aguardar backend ficar pronto
