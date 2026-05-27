@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source ./.env
 
 BASE="http://localhost:8000"
 KC_BASE="http://localhost:8080"
@@ -9,6 +10,7 @@ KC_ADMIN_USER="admin"
 KC_ADMIN_PASS="admin"
 TEST_USER="admin@escritorio.com"
 TEST_PASS="admin123"
+DATAJUD_API_KEY="${DATAJUD_API_KEY:-}"
 
 # ── Obter segredo do client dinamicamente do Keycloak ──────────────────────────
 echo ""
@@ -234,8 +236,8 @@ assert_status POST "$BASE/datajud/importar" 422 \
 if [[ -n "${DATAJUD_API_KEY:-}" ]]; then
   echo ""
   echo "/datajud (com API key — chamadas reais ao DataJud)"
-  assert_status GET "$BASE/datajud/buscar/TJSP?oab=12345" 200
-  assert_status GET "$BASE/datajud/recentes/TJSP" 200
+  assert_status GET "$BASE/datajud/buscar/TJSP?numero_processo=40049132920258260309" 200
+  assert_status GET "$BASE/datajud/recentes/TJSP" 200  
 else
   echo ""
   echo "/datajud chamadas reais ignoradas (DATAJUD_API_KEY não definida no ambiente)"
