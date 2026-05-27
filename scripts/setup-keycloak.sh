@@ -1,17 +1,4 @@
 #!/bin/sh
-# ──────────────────────────────────────────────────────────────────────────────
-# setup-keycloak.sh
-#
-# Configura automaticamente o Keycloak via Admin REST API:
-#   1. Aguarda o Keycloak ficar pronto
-#   2. Cria o realm "escritorio-adv"
-#   3. Desabilita required actions (OTP, Update Password, etc.)
-#   4. Cria o client "backend-api" (confidential, direct access grants)
-#   5. Cria as realm roles: admin, advogado, estagiario
-#   6. Cria um usuário de teste admin@escritorio.com com role "admin"
-#
-# Idempotente: pode rodar múltiplas vezes sem erro.
-# ──────────────────────────────────────────────────────────────────────────────
 
 KC_BASE="http://keycloak:8080"
 REALM="escritorio-adv"
