@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source ./.env
+[[ -f ./.env ]] && source ./.env
 
 BASE="http://localhost:8000"
 KC_BASE="http://localhost:8080"
