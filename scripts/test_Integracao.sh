@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+[[ -f ./.env ]] && source ./.env
 
 BASE="http://localhost:8000"
 KC_BASE="http://localhost:8080"
@@ -9,6 +10,7 @@ KC_ADMIN_USER="admin"
 KC_ADMIN_PASS="admin"
 TEST_USER="admin@escritorio.com"
 TEST_PASS="admin123"
+DATAJUD_API_KEY="${DATAJUD_API_KEY:-}"
 
 # ── Obter segredo do client dinamicamente do Keycloak ──────────────────────────
 echo ""
@@ -220,7 +222,7 @@ echo "Limpando processo base..."
 assert_status DELETE "$BASE/processos/$PROCESSO_ID" 204
 
 echo ""
-echo "/datajud (sem corpo / sem API key — deve retornar 4xx)"
+echo "/datajud (sem corpo — deve retornar 422)"
 
 assert_status POST "$BASE/datajud/consultar" 422 \
   -H "Content-Type: application/json" \
@@ -230,10 +232,16 @@ assert_status POST "$BASE/datajud/importar" 422 \
   -H "Content-Type: application/json" \
   -d '{}'
 
-# Requer ao menos um filtro na busca (ex: oab)
-assert_status GET "$BASE/datajud/buscar/TJSP?oab=12345" 200
-
-assert_status GET "$BASE/datajud/listar/TJSP" 200
+# Testes que batem na API real do DataJud — só rodam se DATAJUD_API_KEY estiver disponível
+if [[ -n "${DATAJUD_API_KEY:-}" ]]; then
+  echo ""
+  echo "/datajud (com API key — chamadas reais ao DataJud)"
+  assert_status GET "$BASE/datajud/buscar/TJSP?numero_processo=40049132920258260309" 200
+  assert_status GET "$BASE/datajud/recentes/TJSP" 200  
+else
+  echo ""
+  echo "/datajud chamadas reais ignoradas (DATAJUD_API_KEY não definida no ambiente)"
+fi
 
 echo ""
 echo "════════════════════════════"
