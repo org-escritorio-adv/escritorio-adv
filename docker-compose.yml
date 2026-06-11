@@ -71,3 +71,12 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+
+  selenium-chrome:
+      image: selenium/standalone-chrome:latest
+      ports:
+        - "4444:4444"
+        - "7900:7900"
+      shm_size: 2gb
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
