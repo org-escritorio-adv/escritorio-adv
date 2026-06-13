@@ -4,6 +4,7 @@ KC_BASE="http://keycloak:8080"
 REALM="escritorio-adv"
 CLIENT_ID="backend-api"
 CLIENT_SECRET="smoke-test-secret-key-001"
+BACKEND_CLIENT_SECRET="gUHc20eRvmYZBKiMUSv0M5qa5A44x7ev"
 TEST_USER="admin@escritorio.com"
 TEST_PASS="admin123"
 
@@ -58,18 +59,23 @@ AUTH="Authorization: Bearer $ADMIN_TOKEN"
 
 # ── 3. Criar realm ──────────────────────────────────────────────────────────
 echo ""
-echo "Criando realm '$REALM'..."
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms" \
-  -H "$AUTH" \
-  -H "Content-Type: application/json" \
-  -d "{\"realm\": \"$REALM\", \"enabled\": true}")
+echo "Verificando realm '$REALM'..."
+REALM_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "$KC_BASE/admin/realms/$REALM" -H "$AUTH")
 
-if [ "$STATUS" = "201" ]; then
-  echo "Realm '$REALM' criado"
-elif [ "$STATUS" = "409" ]; then
+if [ "$REALM_CHECK" = "200" ]; then
   echo "Realm '$REALM' já existe, pulando"
 else
-  echo "Resposta inesperada ao criar realm: $STATUS"
+  echo "Criando realm '$REALM'..."
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms" \
+    -H "$AUTH" \
+    -H "Content-Type: application/json" \
+    -d "{\"realm\": \"$REALM\", \"enabled\": true}")
+
+  if [ "$STATUS" = "201" ]; then
+    echo "Realm '$REALM' criado"
+  else
+    echo "Resposta inesperada ao criar realm: $STATUS"
+  fi
 fi
 
 # ── 4. Desabilitar Required Actions ─────────────────────────────────────────
@@ -111,20 +117,65 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$
     \"clientId\": \"$CLIENT_ID\",
     \"enabled\": true,
     \"protocol\": \"openid-connect\",
-    \"publicClient\": false,
-    \"secret\": \"$CLIENT_SECRET\",
+    \"publicClient\": true,
     \"directAccessGrantsEnabled\": true,
     \"standardFlowEnabled\": true,
     \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
   }")
 
 if [ "$STATUS" = "201" ]; then
-  echo "Client '$CLIENT_ID' criado com secret: $CLIENT_SECRET"
+  echo "Client '$CLIENT_ID' criado (público)"
 elif [ "$STATUS" = "409" ]; then
   echo "Client '$CLIENT_ID' já existe, pulando"
 else
   echo "Resposta inesperada ao criar client: $STATUS"
 fi
+
+# ── 5b. Criar backend-client (service account para Admin API) ────────────────
+echo ""
+echo "Criando client 'backend-client'..."
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/clients" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"clientId\": \"backend-client\",
+    \"enabled\": true,
+    \"protocol\": \"openid-connect\",
+    \"publicClient\": false,
+    \"secret\": \"$BACKEND_CLIENT_SECRET\",
+    \"serviceAccountsEnabled\": true,
+    \"standardFlowEnabled\": false,
+    \"directAccessGrantsEnabled\": false
+  }")
+
+if [ "$STATUS" = "201" ]; then
+  echo "Client 'backend-client' criado"
+elif [ "$STATUS" = "409" ]; then
+  echo "Client 'backend-client' já existe, pulando"
+else
+  echo "Resposta inesperada ao criar backend-client: $STATUS"
+fi
+
+# Atribuir role manage-users ao service account do backend-client
+BC_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients?clientId=backend-client" \
+  -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+SA_USER_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients/$BC_ID/service-account-user" \
+  -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+RM_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients?clientId=realm-management" \
+  -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+
+MANAGE_USERS_ROLE=$(curl -s "$KC_BASE/admin/realms/$REALM/clients/$RM_ID/roles/manage-users" \
+  -H "$AUTH")
+
+curl -s -o /dev/null -X POST \
+  "$KC_BASE/admin/realms/$REALM/users/$SA_USER_ID/role-mappings/clients/$RM_ID" \
+  -H "$AUTH" \
+  -H "Content-Type: application/json" \
+  -d "[$MANAGE_USERS_ROLE]"
+
+echo "Role 'manage-users' atribuída ao service account de 'backend-client'"
 
 # ── 6. Criar realm roles ────────────────────────────────────────────────────
 echo ""

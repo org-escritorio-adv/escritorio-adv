@@ -52,10 +52,14 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://org-escritorio-adv:org-escritorio-adv@postgres:5432/org-escritorio-adv
       KEYCLOAK_SERVER_URL: http://keycloak:8080
-      KEYCLOAK_REALM: escritorio-realm
+      KEYCLOAK_REALM: escritorio-adv
       KEYCLOAK_CLIENT_ID: backend-api
+      KEYCLOAK_ADMIN_CLIENT_ID: backend-client
+      KEYCLOAK_ADMIN_CLIENT_SECRET: gUHc20eRvmYZBKiMUSv0M5qa5A44x7ev
       DATAJUD_BASE_URL: ${DATAJUD_BASE_URL:-https://api-publica.datajud.cnj.jus.br}
       DATAJUD_API_KEY: ${DATAJUD_API_KEY:-}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      BREVO_FROM_EMAIL: ${BREVO_FROM_EMAIL:-noreply@escritorio-adv.com.br}
     depends_on:
       postgres:
         condition: service_healthy
