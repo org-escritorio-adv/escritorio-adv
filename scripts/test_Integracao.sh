@@ -12,43 +12,7 @@ TEST_USER="admin@escritorio.com"
 TEST_PASS="admin123"
 DATAJUD_API_KEY="${DATAJUD_API_KEY:-}"
 
-# ── Obter segredo do client dinamicamente do Keycloak ──────────────────────────
-echo ""
-echo "Obtendo segredo do client '$CLIENT_ID' do Keycloak..."
 
-ADMIN_TOKEN_RESPONSE=$(curl -s -X POST "$KC_BASE/realms/master/protocol/openid-connect/token" \
-  -d "client_id=admin-cli" \
-  -d "username=$KC_ADMIN_USER" \
-  -d "password=$KC_ADMIN_PASS" \
-  -d "grant_type=password" 2>/dev/null || echo "")
-
-ADMIN_TOKEN=$(echo "$ADMIN_TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null || echo "")
-
-if [[ -z "$ADMIN_TOKEN" ]]; then
-  echo "Falha ao obter token de admin do Keycloak"
-  echo "   Resposta: $ADMIN_TOKEN_RESPONSE"
-  exit 1
-fi
-
-CLIENT_UUID=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
-  "$KC_BASE/admin/realms/$REALM/clients?clientId=$CLIENT_ID" 2>/dev/null \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])" 2>/dev/null || echo "")
-
-if [[ -z "$CLIENT_UUID" ]]; then
-  echo "Não foi possível encontrar o UUID do client '$CLIENT_ID'"
-  exit 1
-fi
-
-CLIENT_SECRET=$(curl -s -H "Authorization: Bearer $ADMIN_TOKEN" \
-  "$KC_BASE/admin/realms/$REALM/clients/$CLIENT_UUID/client-secret" 2>/dev/null \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['value'])" 2>/dev/null || echo "")
-
-if [[ -z "$CLIENT_SECRET" ]]; then
-  echo "Falha ao obter o Client Secret do Keycloak"
-  exit 1
-fi
-
-echo "Segredo do client obtido com sucesso"
 
 PASS=0
 FAIL=0
@@ -61,7 +25,6 @@ TOKEN=""
 for attempt in $(seq 1 15); do
   TOKEN_RESPONSE=$(curl -s -X POST "$KC_BASE/realms/$REALM/protocol/openid-connect/token" \
     -d "client_id=$CLIENT_ID" \
-    -d "client_secret=$CLIENT_SECRET" \
     -d "username=$TEST_USER" \
     -d "password=$TEST_PASS" \
     -d "grant_type=password" 2>/dev/null || echo "")
