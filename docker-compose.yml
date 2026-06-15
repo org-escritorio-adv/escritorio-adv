@@ -56,6 +56,7 @@ services:
       KEYCLOAK_CLIENT_ID: backend-api
       KEYCLOAK_ADMIN_CLIENT_ID: backend-client
       KEYCLOAK_ADMIN_CLIENT_SECRET: gUHc20eRvmYZBKiMUSv0M5qa5A44x7ev
+      KEYCLOAK_CLIENT_SECRET: gUHc20eRvmYZBKiMUSv0M5qa5A44x7ev
       DATAJUD_BASE_URL: ${DATAJUD_BASE_URL:-https://api-publica.datajud.cnj.jus.br}
       DATAJUD_API_KEY: ${DATAJUD_API_KEY:-}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
@@ -73,6 +74,11 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    environment:
+      - VITE_KEYCLOAK_URL=http://localhost:8080
+      - VITE_KEYCLOAK_REALM=escritorio-adv
+      - VITE_KEYCLOAK_CLIENT_ID=backend-api
+      - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
 

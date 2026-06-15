@@ -126,7 +126,20 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$
 if [ "$STATUS" = "201" ]; then
   echo "Client '$CLIENT_ID' criado (público)"
 elif [ "$STATUS" = "409" ]; then
-  echo "Client '$CLIENT_ID' já existe, pulando"
+  echo "Client '$CLIENT_ID' já existe, atualizando configurações..."
+  ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients?clientId=$CLIENT_ID" -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  curl -s -o /dev/null -X PUT "$KC_BASE/admin/realms/$REALM/clients/$ID" \
+    -H "$AUTH" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"clientId\": \"$CLIENT_ID\",
+      \"enabled\": true,
+      \"protocol\": \"openid-connect\",
+      \"publicClient\": true,
+      \"directAccessGrantsEnabled\": true,
+      \"standardFlowEnabled\": true,
+      \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+    }"
 else
   echo "Resposta inesperada ao criar client: $STATUS"
 fi
