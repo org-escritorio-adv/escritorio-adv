@@ -3,7 +3,6 @@
 KC_BASE="http://keycloak:8080"
 REALM="escritorio-adv"
 CLIENT_ID="backend-api"
-CLIENT_SECRET="smoke-test-secret-key-001"
 BACKEND_CLIENT_SECRET="gUHc20eRvmYZBKiMUSv0M5qa5A44x7ev"
 TEST_USER="admin@escritorio.com"
 TEST_PASS="admin123"
@@ -109,57 +108,68 @@ done
 
 # ── 5. Criar client ─────────────────────────────────────────────────────────
 echo ""
-echo "Criando client '$CLIENT_ID'..."
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/clients" \
-  -H "$AUTH" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"clientId\": \"$CLIENT_ID\",
-    \"enabled\": true,
-    \"protocol\": \"openid-connect\",
-    \"publicClient\": true,
-    \"directAccessGrantsEnabled\": true,
-    \"standardFlowEnabled\": true,
-    \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
-  }")
+echo "Verificando client '$CLIENT_ID'..."
+CLIENT_EXISTING_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients?clientId=$CLIENT_ID" \
+  -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
-if [ "$STATUS" = "201" ]; then
-  echo "Client '$CLIENT_ID' criado (público)"
-elif [ "$STATUS" = "409" ]; then
+if [ -n "$CLIENT_EXISTING_ID" ]; then
   echo "Client '$CLIENT_ID' já existe, pulando"
 else
-  echo "Resposta inesperada ao criar client: $STATUS"
+  echo "Criando client '$CLIENT_ID'..."
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/clients" \
+    -H "$AUTH" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"clientId\": \"$CLIENT_ID\",
+      \"enabled\": true,
+      \"protocol\": \"openid-connect\",
+      \"publicClient\": true,
+      \"directAccessGrantsEnabled\": true,
+      \"standardFlowEnabled\": true,
+      \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+    }")
+
+  if [ "$STATUS" = "201" ]; then
+    echo "Client '$CLIENT_ID' criado (público)"
+  else
+    echo "Resposta inesperada ao criar client: $STATUS"
+  fi
 fi
 
 # ── 5b. Criar backend-client (service account para Admin API) ────────────────
 echo ""
-echo "Criando client 'backend-client'..."
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/clients" \
-  -H "$AUTH" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"clientId\": \"backend-client\",
-    \"enabled\": true,
-    \"protocol\": \"openid-connect\",
-    \"publicClient\": false,
-    \"secret\": \"$BACKEND_CLIENT_SECRET\",
-    \"serviceAccountsEnabled\": true,
-    \"standardFlowEnabled\": false,
-    \"directAccessGrantsEnabled\": false
-  }")
-
-if [ "$STATUS" = "201" ]; then
-  echo "Client 'backend-client' criado"
-elif [ "$STATUS" = "409" ]; then
-  echo "Client 'backend-client' já existe, pulando"
-else
-  echo "Resposta inesperada ao criar backend-client: $STATUS"
-fi
-
-# Atribuir role manage-users ao service account do backend-client
+echo "Verificando client 'backend-client'..."
 BC_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients?clientId=backend-client" \
   -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
+if [ -n "$BC_ID" ]; then
+  echo "Client 'backend-client' já existe, pulando"
+else
+  echo "Criando client 'backend-client'..."
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/clients" \
+    -H "$AUTH" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"clientId\": \"backend-client\",
+      \"enabled\": true,
+      \"protocol\": \"openid-connect\",
+      \"publicClient\": false,
+      \"secret\": \"$BACKEND_CLIENT_SECRET\",
+      \"serviceAccountsEnabled\": true,
+      \"standardFlowEnabled\": false,
+      \"directAccessGrantsEnabled\": false
+    }")
+
+  if [ "$STATUS" = "201" ]; then
+    echo "Client 'backend-client' criado"
+    BC_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients?clientId=backend-client" \
+      -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+  else
+    echo "Resposta inesperada ao criar backend-client: $STATUS"
+  fi
+fi
+
+# Atribuir role manage-users ao service account do backend-client
 SA_USER_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/clients/$BC_ID/service-account-user" \
   -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
@@ -181,47 +191,58 @@ echo "Role 'manage-users' atribuída ao service account de 'backend-client'"
 echo ""
 echo "🎭 Criando realm roles..."
 for ROLE in admin advogado estagiario; do
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/roles" \
-    -H "$AUTH" \
-    -H "Content-Type: application/json" \
-    -d "{\"name\": \"$ROLE\"}")
+  ROLE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$KC_BASE/admin/realms/$REALM/roles/$ROLE" \
+    -H "$AUTH")
 
-  if [ "$STATUS" = "201" ]; then
-    echo "Role '$ROLE' criada"
-  elif [ "$STATUS" = "409" ]; then
+  if [ "$ROLE_STATUS" = "200" ]; then
     echo "Role '$ROLE' já existe"
   else
-    echo "Role '$ROLE': resposta $STATUS"
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/roles" \
+      -H "$AUTH" \
+      -H "Content-Type: application/json" \
+      -d "{\"name\": \"$ROLE\"}")
+
+    if [ "$STATUS" = "201" ]; then
+      echo "Role '$ROLE' criada"
+    else
+      echo "Role '$ROLE': resposta $STATUS"
+    fi
   fi
 done
 
 # ── 7. Criar usuário de teste ───────────────────────────────────────────────
 echo ""
-echo "👤 Criando usuário de teste '$TEST_USER'..."
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/users" \
-  -H "$AUTH" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"username\": \"$TEST_USER\",
-    \"email\": \"$TEST_USER\",
-    \"firstName\": \"Admin\",
-    \"lastName\": \"Teste\",
-    \"enabled\": true,
-    \"emailVerified\": true,
-    \"credentials\": [{
-      \"type\": \"password\",
-      \"value\": \"$TEST_PASS\",
-      \"temporary\": false
-    }],
-    \"requiredActions\": []
-  }")
+echo "Verificando usuário de teste '$TEST_USER'..."
+EXISTING_USER_ID=$(curl -s "$KC_BASE/admin/realms/$REALM/users?username=$TEST_USER&exact=true" \
+  -H "$AUTH" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
-if [ "$STATUS" = "201" ]; then
-  echo "Usuário '$TEST_USER' criado (senha: $TEST_PASS)"
-elif [ "$STATUS" = "409" ]; then
+if [ -n "$EXISTING_USER_ID" ]; then
   echo "Usuário '$TEST_USER' já existe, pulando"
 else
-  echo "Resposta inesperada ao criar usuário: $STATUS"
+  echo "Criando usuário de teste '$TEST_USER'..."
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/users" \
+    -H "$AUTH" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"username\": \"$TEST_USER\",
+      \"email\": \"$TEST_USER\",
+      \"firstName\": \"Admin\",
+      \"lastName\": \"Teste\",
+      \"enabled\": true,
+      \"emailVerified\": true,
+      \"credentials\": [{
+        \"type\": \"password\",
+        \"value\": \"$TEST_PASS\",
+        \"temporary\": false
+      }],
+      \"requiredActions\": []
+    }")
+
+  if [ "$STATUS" = "201" ]; then
+    echo "Usuário '$TEST_USER' criado (senha: $TEST_PASS)"
+  else
+    echo "Resposta inesperada ao criar usuário: $STATUS"
+  fi
 fi
 
 # ── 8. Atribuir role "admin" ao usuário ─────────────────────────────────────
@@ -265,7 +286,7 @@ echo "Keycloak configurado com sucesso!"
 echo ""
 echo "  Realm:         $REALM"
 echo "  Client ID:     $CLIENT_ID"
-echo "  Client Secret: $CLIENT_SECRET"
+echo "  Client Type:   public"
 echo "  Usuário:       $TEST_USER"
 echo "  Senha:         $TEST_PASS"
 echo "  Role:          admin"
