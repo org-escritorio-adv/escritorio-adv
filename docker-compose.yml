@@ -16,14 +16,29 @@ services:
       timeout: 5s
       retries: 5
 
+  keycloak-postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+      POSTGRES_DB: keycloak
+    volumes:
+      - keycloak_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.2
     command: start-dev
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/org-escritorio-adv
-      KC_DB_USERNAME: org-escritorio-adv
-      KC_DB_PASSWORD: org-escritorio-adv
+      KC_DB_URL: jdbc:postgresql://keycloak-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KEYCLOAK_ADMIN: admin
@@ -31,7 +46,7 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      postgres:
+      keycloak-postgres:
         condition: service_healthy
 
   keycloak-setup:
@@ -84,3 +99,6 @@ services:
       shm_size: 2gb
       extra_hosts:
         - "host.docker.internal:host-gateway"
+
+volumes:
+  keycloak_postgres_data:
