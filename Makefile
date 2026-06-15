@@ -25,7 +25,7 @@ clean:
 	docker compose down -v
 
 test:
-	docker compose exec backend pytest src/
+	docker compose exec -e PYTHONPATH=/app backend pytest src/
 
 logs:
 	docker compose logs -f
