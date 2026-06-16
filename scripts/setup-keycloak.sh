@@ -28,7 +28,6 @@ done
 echo ""
 echo "Obtendo token de admin..."
 
-# Retry para obter token (Keycloak pode demorar um pouco mais para aceitar logins)
 ADMIN_TOKEN=""
 j=0
 while [ "$j" -lt 10 ]; do
@@ -80,15 +79,13 @@ fi
 
 # ── 4. Desabilitar Required Actions ─────────────────────────────────────────
 echo ""
-echo "🔧 Desabilitando required actions no realm '$REALM'..."
+echo "Desabilitando required actions no realm '$REALM'..."
 
 for ACTION in CONFIGURE_TOTP UPDATE_PASSWORD UPDATE_PROFILE VERIFY_EMAIL; do
-  # Obter a config atual da action
   ACTION_JSON=$(curl -s "$KC_BASE/admin/realms/$REALM/authentication/required-actions/$ACTION" \
     -H "$AUTH" 2>/dev/null || echo "")
 
   if [ -n "$ACTION_JSON" ] && echo "$ACTION_JSON" | grep -q "alias"; then
-    # Substituir "enabled":true por "enabled":false
     UPDATED_JSON=$(echo "$ACTION_JSON" | sed 's/"enabled"[[:space:]]*:[[:space:]]*true/"enabled":false/g' | sed 's/"defaultAction"[[:space:]]*:[[:space:]]*true/"defaultAction":false/g')
 
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
@@ -103,7 +100,7 @@ for ACTION in CONFIGURE_TOTP UPDATE_PASSWORD UPDATE_PROFILE VERIFY_EMAIL; do
       echo "$ACTION → resposta $STATUS"
     fi
   else
-    echo " $ACTION → não encontrado ou já configurado"
+    echo "$ACTION → não encontrado ou já configurado"
   fi
 done
 
@@ -120,7 +117,8 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$
     \"publicClient\": true,
     \"directAccessGrantsEnabled\": true,
     \"standardFlowEnabled\": true,
-    \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+    \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\", \"http://frontend:3000/*\"],
+    \"webOrigins\": [\"http://localhost:3000\", \"http://frontend:3000\", \"+\"]
   }")
 
 if [ "$STATUS" = "201" ]; then
@@ -138,7 +136,8 @@ elif [ "$STATUS" = "409" ]; then
       \"publicClient\": true,
       \"directAccessGrantsEnabled\": true,
       \"standardFlowEnabled\": true,
-      \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+      \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\", \"http://frontend:3000/*\"],
+      \"webOrigins\": [\"http://localhost:3000\", \"http://frontend:3000\", \"+\"]
     }"
 else
   echo "Resposta inesperada ao criar client: $STATUS"
@@ -192,7 +191,7 @@ echo "Role 'manage-users' atribuída ao service account de 'backend-client'"
 
 # ── 6. Criar realm roles ────────────────────────────────────────────────────
 echo ""
-echo "🎭 Criando realm roles..."
+echo "Criando realm roles..."
 for ROLE in admin advogado estagiario; do
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/roles" \
     -H "$AUTH" \
@@ -210,7 +209,7 @@ done
 
 # ── 7. Criar usuário de teste ───────────────────────────────────────────────
 echo ""
-echo "👤 Criando usuário de teste '$TEST_USER'..."
+echo "Criando usuário de teste '$TEST_USER'..."
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$REALM/users" \
   -H "$AUTH" \
   -H "Content-Type: application/json" \
@@ -241,7 +240,6 @@ fi
 echo ""
 echo "Atribuindo role 'admin' ao usuário..."
 
-# Buscar ID do usuário
 USER_RESP=$(curl -s "$KC_BASE/admin/realms/$REALM/users?username=$TEST_USER&exact=true" \
   -H "$AUTH" 2>/dev/null || echo "[]")
 
@@ -250,11 +248,9 @@ USER_ID=$(echo "$USER_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\
 if [ -z "$USER_ID" ]; then
   echo "Não foi possível encontrar o usuário '$TEST_USER' para atribuir a role"
 else
-  # Buscar representação da role "admin"
   ROLE_JSON=$(curl -s "$KC_BASE/admin/realms/$REALM/roles/admin" -H "$AUTH" 2>/dev/null || echo "")
 
   if [ -n "$ROLE_JSON" ] && echo "$ROLE_JSON" | grep -q "name"; then
-    # Atribuir role ao usuário
     STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
       "$KC_BASE/admin/realms/$REALM/users/$USER_ID/role-mappings/realm" \
       -H "$AUTH" \

@@ -24,6 +24,8 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/org-escritorio-adv
       KC_DB_USERNAME: org-escritorio-adv
       KC_DB_PASSWORD: org-escritorio-adv
+      KC_HOSTNAME: localhost          # ← adicionada
+      KC_HOSTNAME_PORT: "8080"       # ← adicionada
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KEYCLOAK_ADMIN: admin
@@ -75,7 +77,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - VITE_KEYCLOAK_URL=http://localhost:8080
+      - VITE_KEYCLOAK_URL=http://host.docker.internal:8080
       - VITE_KEYCLOAK_REALM=escritorio-adv
       - VITE_KEYCLOAK_CLIENT_ID=backend-api
       - VITE_API_URL=http://localhost:8000
@@ -90,3 +92,6 @@ services:
       shm_size: 2gb
       extra_hosts:
         - "host.docker.internal:host-gateway"
+        - "keycloak:host-gateway"    # ← adicionada
+        - "frontend:host-gateway"    # ← adicionada
+        - "backend:host-gateway"     # ← adicionada
