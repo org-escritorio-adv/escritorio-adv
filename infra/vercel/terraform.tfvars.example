@@ -1,0 +1,38 @@
+# Conta pessoal Vercel: mantenha null.
+vercel_team = null
+
+github_repo       = "org-escritorio-adv/escritorio-adv"
+production_branch = "main"
+
+frontend_project_name  = "escritorio-adv"
+backend_project_name   = "escritorio-adv-api"
+frontend_root_directory = "frontend"
+backend_root_directory  = "backend"
+
+# Se ainda nao tiver dominio, deixe vazio e use os dominios .vercel.app.
+frontend_domain = ""
+backend_domain  = ""
+
+# Use vazio para inferir: https://<backend_project_name>.vercel.app
+backend_public_url = ""
+
+# Banco Neon criado automaticamente.
+neon_project_name  = "escritorio-adv-db"
+neon_org_id        = "org-exemplo"
+neon_region_id     = "aws-us-east-1"
+neon_branch_name   = "main"
+neon_database_name = "escritorio_adv"
+neon_role_name     = "escritorio_adv"
+
+# Keycloak nao e criado por este Terraform. Preencha com o servico externo.
+keycloak_server_url         = "https://auth.seudominio.com.br"
+keycloak_realm              = "escritorio-adv"
+keycloak_client_id          = "backend-api"
+keycloak_admin_client_id    = "backend-client"
+keycloak_admin_client_secret = "trocar"
+
+datajud_base_url = "https://api-publica.datajud.cnj.jus.br"
+datajud_api_key  = ""
+
+resend_api_key    = ""
+resend_from_email = "noreply@escritorio-adv.com.br"
