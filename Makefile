@@ -7,6 +7,7 @@ help:
 	@echo "  make build           - Reconstrói e inicia os containers"
 	@echo "  make clean           - Para containers e DELETA OS VOLUMES (incluindo o banco de dados)"
 	@echo "  make test            - Executa os testes do backend usando pytest"
+	@echo "  make test-integration- Executa os testes de integração do backend"
 	@echo "  make logs            - Mostra os logs de todos os containers"
 	@echo "  make shell-backend   - Abre o terminal dentro do container do backend"
 	@echo "  make shell-frontend  - Abre o terminal dentro do container do frontend"
@@ -26,6 +27,9 @@ clean:
 
 test:
 	docker compose exec -e PYTHONPATH=/app backend pytest src/
+
+test-integration:
+	docker compose exec -e PYTHONPATH=/app backend pytest tests/integration/
 
 logs:
 	docker compose logs -f
