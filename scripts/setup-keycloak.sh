@@ -126,7 +126,21 @@ else
       \"publicClient\": true,
       \"directAccessGrantsEnabled\": true,
       \"standardFlowEnabled\": true,
-      \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+      \"redirectUris\": [
+        \"http://localhost:8000/*\",
+        \"http://localhost:3000/*\",
+        \"https://escritorio-adv.vercel.app/*\",
+        \"https://escritorio-adv-two.vercel.app/*\",
+        \"https://escritorio-adv-mauricio-araujoos-projects.vercel.app/*\",
+        \"https://escritorio-adv-git-main-mauricio-araujoos-projects.vercel.app/*\"
+      ],
+      \"webOrigins\": [
+        \"http://localhost:3000\",
+        \"https://escritorio-adv.vercel.app\",
+        \"https://escritorio-adv-two.vercel.app\",
+        \"https://escritorio-adv-mauricio-araujoos-projects.vercel.app\",
+        \"https://escritorio-adv-git-main-mauricio-araujoos-projects.vercel.app\"
+      ]
     }")
 
   if [ "$STATUS" = "201" ]; then

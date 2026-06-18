@@ -18,6 +18,7 @@ locals {
     KEYCLOAK_CLIENT_ID       = var.keycloak_client_id
     KEYCLOAK_ADMIN_CLIENT_ID = var.keycloak_admin_client_id
     DATAJUD_BASE_URL         = var.datajud_base_url
+    BREVO_FROM_EMAIL         = var.brevo_from_email
     RESEND_FROM_EMAIL        = var.resend_from_email
     ENVIRONMENT              = "production"
   }
@@ -42,11 +43,11 @@ resource "neon_project" "database" {
 
 resource "vercel_project" "backend" {
   name           = var.backend_project_name
-  root_directory = var.backend_root_directory
+  root_directory = var.backend_root_directory != "" ? var.backend_root_directory : null
 
   git_repository = {
     type              = "github"
-    repo              = var.github_repo
+    repo              = var.backend_github_repo
     production_branch = var.production_branch
   }
 
@@ -130,6 +131,14 @@ resource "vercel_project_environment_variable" "backend_resend_api_key" {
   project_id = vercel_project.backend.id
   key        = "RESEND_API_KEY"
   value      = var.resend_api_key
+  target     = ["production", "preview"]
+  sensitive  = true
+}
+
+resource "vercel_project_environment_variable" "backend_brevo_api_key" {
+  project_id = vercel_project.backend.id
+  key        = "BREVO_API_KEY"
+  value      = var.brevo_api_key
   target     = ["production", "preview"]
   sensitive  = true
 }

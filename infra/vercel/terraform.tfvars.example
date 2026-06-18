@@ -2,12 +2,13 @@
 vercel_team = null
 
 github_repo       = "org-escritorio-adv/escritorio-adv"
+backend_github_repo = "org-escritorio-adv/backend"
 production_branch = "main"
 
 frontend_project_name  = "escritorio-adv"
 backend_project_name   = "escritorio-adv-api"
 frontend_root_directory = "frontend"
-backend_root_directory  = "backend"
+backend_root_directory  = ""
 
 # Se ainda nao tiver dominio, deixe vazio e use os dominios .vercel.app.
 frontend_domain = ""
@@ -36,3 +37,6 @@ datajud_api_key  = ""
 
 resend_api_key    = ""
 resend_from_email = "noreply@escritorio-adv.com.br"
+
+brevo_api_key    = "trocar"
+brevo_from_email = "noreply@escritorio-adv.com.br"

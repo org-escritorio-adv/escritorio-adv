@@ -147,6 +147,31 @@ ENV/
 env.bak/
 venv.bak/
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Editor swap files
+*.swp
+
+# Local tools and tunnel configs
+.tools/
+
+# Local private keys
+*.pem
+*.key
+id_rsa
+id_ed25519
+
 # Spyder project settings
 .spyderproject
 .spyproject

@@ -10,6 +10,12 @@ variable "github_repo" {
   default     = "org-escritorio-adv/escritorio-adv"
 }
 
+variable "backend_github_repo" {
+  description = "Repositorio Git usado pelo projeto backend na Vercel. Use o repo direto do backend para evitar deploy vazio de submodulo."
+  type        = string
+  default     = "org-escritorio-adv/backend"
+}
+
 variable "production_branch" {
   description = "Branch usada para deployments de producao."
   type        = string
@@ -37,7 +43,7 @@ variable "frontend_root_directory" {
 variable "backend_root_directory" {
   description = "Diretorio do backend no repo raiz."
   type        = string
-  default     = "backend"
+  default     = ""
 }
 
 variable "frontend_domain" {
@@ -164,6 +170,19 @@ variable "resend_api_key" {
 
 variable "resend_from_email" {
   description = "Remetente dos e-mails transacionais."
+  type        = string
+  default     = "noreply@escritorio-adv.com.br"
+}
+
+variable "brevo_api_key" {
+  description = "Chave da API Brevo para e-mail transacional."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "brevo_from_email" {
+  description = "Remetente dos e-mails transacionais via Brevo."
   type        = string
   default     = "noreply@escritorio-adv.com.br"
 }
