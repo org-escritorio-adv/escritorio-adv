@@ -49,6 +49,10 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+    # Carrega variáveis adicionais (ex.: R2_*) do .env local.
+    # As definidas em `environment` abaixo têm prioridade sobre o env_file.
+    env_file:
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg2://org-escritorio-adv:org-escritorio-adv@postgres:5432/org-escritorio-adv
       KEYCLOAK_SERVER_URL: http://keycloak:8080
