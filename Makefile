@@ -35,7 +35,7 @@ test-integration:
 	docker compose exec -e PYTHONPATH=/app backend pytest tests/integration/
 
 test-frontend-unit:
-	docker compose exec frontend npm run test:run -- "src/**/*.spec.tsx" "src/**/*.spec.ts"
+	docker compose exec frontend npm run test:run
 
 test-selenium:
 	docker compose exec frontend sh -c 'for file in src/tests/*.test.js; do echo "Rodando $$file..."; node "$$file"; done'
