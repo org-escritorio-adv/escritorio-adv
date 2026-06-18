@@ -10,7 +10,8 @@ help:
 	@echo "  make test-backend-unit - Executa os testes unitários do backend"
 	@echo "  make test-integration- Executa os testes de integração do backend"
 	@echo "  make test-frontend-unit- Executa os testes unitários do frontend"
-	@echo "  make test-selenium   - Executa os testes automatizados do selenium"
+	@echo "  make test-selenium   - Executa os testes automatizados do selenium (local)"
+	@echo "                         -> Em Prod: TEST_URL=https://escritorio-adv-two.vercel.app/ make test-selenium"
 	@echo "  make logs            - Mostra os logs de todos os containers"
 	@echo "  make shell-backend   - Abre o terminal dentro do container do backend"
 	@echo "  make shell-frontend  - Abre o terminal dentro do container do frontend"
@@ -38,7 +39,7 @@ test-frontend-unit:
 	docker compose exec frontend npm run test:run
 
 test-selenium:
-	docker compose exec frontend sh -c 'for file in src/tests/*.test.js; do echo "Rodando $$file..."; node "$$file"; done'
+	docker compose exec -e TEST_URL="$(TEST_URL)" frontend sh -c 'for file in src/tests/*.test.js; do echo "Rodando $$file..."; node "$$file"; done'
 
 test-all: test-backend-unit test-integration test-frontend-unit test-selenium
 
