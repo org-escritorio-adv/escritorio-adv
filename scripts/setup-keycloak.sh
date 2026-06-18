@@ -120,7 +120,8 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$KC_BASE/admin/realms/$
     \"publicClient\": true,
     \"directAccessGrantsEnabled\": true,
     \"standardFlowEnabled\": true,
-    \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+    \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\", \"http://frontend:3000/*\"],
+    \"webOrigins\": [\"+\"]
   }")
 
 if [ "$STATUS" = "201" ]; then
@@ -138,7 +139,8 @@ elif [ "$STATUS" = "409" ]; then
       \"publicClient\": true,
       \"directAccessGrantsEnabled\": true,
       \"standardFlowEnabled\": true,
-      \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\"]
+      \"redirectUris\": [\"http://localhost:8000/*\", \"http://localhost:3000/*\", \"http://frontend:3000/*\"],
+      \"webOrigins\": [\"+\"]
     }"
 else
   echo "Resposta inesperada ao criar client: $STATUS"
